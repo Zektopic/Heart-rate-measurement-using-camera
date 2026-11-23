@@ -26,14 +26,16 @@ python app.py
 - Pick **Webcam** or **Video file** (Open video... / Ctrl+O), then press **Start** (or Space) to start and stop the measurement
 - Video files are analysed against their own timestamps and played back in real time
 - The `.dat` landmark models are loaded from the folder of the code, so the app can be started from any directory
-- In case of plotting graphs, run "graph_plot.py" 
-- For the Eulerian Video Magnification implementation, run "amplify_color.py"
+- `python graph_plot.py` plots the spectrum of the recorded `signal.dat` (needs `pip install matplotlib`)
+- `python amplify_color.py [--camera N] [--motion]` is the Eulerian Video Magnification demo (Esc quits)
 
 # Tests
 ```
 pip install pytest
-python -m pytest tests
+python -m pytest
 ```
+The end-to-end test runs a synthetic clip (the face from `result.JPG` with a pulse added) through the whole pipeline.
+CI runs `ruff check .` and the tests on Python 3.12 and 3.13.
 
 # Results
 - Data from a specialized device, Compact 5 medical Econet, is used for the ground truth. In certain circumstances, the Heart rate values measured using the application and the device are the same
