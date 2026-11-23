@@ -7,10 +7,15 @@
 - Application: monitoring drivers‘ physiological state
 
 # Methods 
-- Detect face, align and get ROI using facial landmarks
+- Detect face, align and get ROI using facial landmarks (the face is tracked through its landmarks between detections)
 - Apply band pass filter with fl = 0.8 Hz and fh = 3 Hz, which are 48 and 180 bpm respectively
-- Average green value of the ROIs in each frame is calculated and pushed to a rolling data buffer which is 100 samples long
+- The average colour of the ROIs in each frame is pushed to a rolling window of the last 10 seconds
+- The pulse signal is the green channel (**Green**, default) or the POS projection of all three channels
+  (**POS**, W. Wang et al. 2017), which cancels brightness changes caused by lighting and motion
 - Resample to an even time grid, detrend, apply a Hamming window and take the zero-padded FFT. The highest peak between 50 and 180 bpm is the heart rate (the median of the last 5 estimates is shown)
+- Signal quality is the SNR of that peak (and its harmonic) against the rest of the band: good from 6 dB, fair from
+  2 dB, poor below. A poor reading is shown greyed out. A periodic disturbance (e.g. flickering light) can still give a
+  high SNR at the wrong rate; POS helps against that
 - Amplify color to make the color variation visible 
 
 # Requirements
@@ -21,10 +26,16 @@ pip install -r requirements.txt
 
 # Implementation
 ```
-python app.py
+python app.py [--camera N] [--video FILE] [--method green|pos]
 ```
-- Pick **Webcam** or **Video file** (Open video... / Ctrl+O), then press **Start** (or Space) to start and stop the measurement
+- Pick **Webcam** (and the camera number) or **Video file** (Open video... / Ctrl+O), choose **Green** or **POS**,
+  then press **Start** (or Space) to start and stop the measurement
 - Video files are analysed against their own timestamps and played back in real time
+- **Save CSV...** (Ctrl+S) writes the readings of the last measurement, one per second: time, bpm, SNR, quality
+- Without the GUI, as fast as the computer allows:
+  ```
+  python analyze_video.py VIDEO [--csv readings.csv] [--method green|pos] [--window 10]
+  ```
 - The `.dat` landmark models are loaded from the folder of the code, so the app can be started from any directory
 - `python graph_plot.py` plots the spectrum of the recorded `signal.dat` (needs `pip install matplotlib`)
 - `python amplify_color.py [--camera N] [--motion]` is the Eulerian Video Magnification demo (Esc quits)

@@ -1,3 +1,4 @@
+import csv
 import time
 import traceback
 
@@ -5,7 +6,7 @@ import cv2
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from face_utilities import Face_utilities
-from signal_processing import HeartRateEstimator, extract_color
+from signal_processing import HeartRateEstimator, extract_bgr, quality_label
 from video_source import VideoSourceError, open_camera, open_video_file
 
 
@@ -28,23 +29,56 @@ def fit(image, size):
     return cv2.resize(image, new_size, interpolation=cv2.INTER_LINEAR)
 
 
+class MeasurementLog:
+    """One row per `interval` seconds of measurement: time, bpm, SNR, quality."""
+
+    HEADER = ("time_s", "bpm", "snr_db", "quality")
+
+    def __init__(self, interval=1.0):
+        self.interval = interval
+        self.rows = []
+
+    def clear(self):
+        self.rows = []
+
+    def add(self, timestamp, bpm, snr):
+        if self.rows and timestamp - self.rows[-1][0] < self.interval:
+            return False
+        self.rows.append((round(float(timestamp), 3), round(float(bpm), 1), round(float(snr), 2), quality_label(snr)))
+        return True
+
+    def write_csv(self, path):
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.HEADER)
+            writer.writerows(self.rows)
+
+
 class Process(object):
     """Frame -> heart rate pipeline. Qt free, so it can be used and tested on its own.
 
     redetect_every: the face detector runs at most every this many frames;
     in between the face is tracked through its landmarks (see Face_utilities).
+    window_seconds: length of the analysis window. buffer_size: a window of
+    this many samples instead (the old behaviour).
+    method: "green" or "pos", see signal_processing.
     """
 
-    def __init__(self, landmarks="5", buffer_size=100, redetect_every=5):
+    def __init__(self, landmarks="5", buffer_size=None, redetect_every=5, window_seconds=10.0, method="green"):
         self.landmarks = landmarks
+        self.method = method
         self.fu = Face_utilities(redetect_every=redetect_every)
-        self.estimator = HeartRateEstimator(buffer_size=buffer_size)
+        if buffer_size is not None:
+            self.estimator = HeartRateEstimator(buffer_size=buffer_size, method=method)
+        else:
+            self.estimator = HeartRateEstimator(window_seconds=window_seconds, method=method)
         self.frame_out = None
         self.frame_ROI = None
         self.rect = None
 
     # read-only views of the estimator state
     bpm = property(lambda self: self.estimator.bpm)
+    snr = property(lambda self: self.estimator.snr)
     fps = property(lambda self: self.estimator.fps)
     samples = property(lambda self: self.estimator.samples)
     freqs = property(lambda self: self.estimator.freqs)
@@ -68,11 +102,11 @@ class Process(object):
         rects, _, _, aligned_face, aligned_shape = found
 
         rois = self.fu.ROI_extraction(aligned_face, aligned_shape)
-        green = extract_color(rois)
-        if green is None:
+        bgr = extract_bgr(rois)
+        if bgr is None:
             return False
 
-        self.estimator.push(green, timestamp)
+        self.estimator.push(bgr if self.method == "pos" else float(bgr[1]), timestamp)
         self.frame_out = frame
         self.frame_ROI = aligned_face
         self.rect = rects[0]
@@ -94,7 +128,7 @@ class ProcessingThread(QThread):
     """
 
     view_signal = pyqtSignal(object, object)          # camera frame, aligned face (BGR, scaled to the views)
-    bpm_signal = pyqtSignal(float)
+    bpm_signal = pyqtSignal(float, float)             # bpm (0: none), SNR in dB
     plot_signal = pyqtSignal(object, object, object)  # pulse signal, bpm axis, spectrum
     status_signal = pyqtSignal(str)
 
@@ -112,7 +146,10 @@ class ProcessingThread(QThread):
         self._status_time = 0.0
         self.video_file = None
         self.webcam = True
-        self.process = Process()
+        self.camera_index = 0
+        self.method = "green"
+        self.process = Process(method=self.method)
+        self.log = MeasurementLog()
 
     def view_shown(self):
         self.view_pending = False
@@ -147,11 +184,11 @@ class ProcessingThread(QThread):
     def _open_capture(self):
         """Returns an opened capture, or None after reporting the error."""
         if self.webcam:
-            cap = open_camera(0)
+            cap = open_camera(self.camera_index)
             if cap.isOpened():
                 return cap
             cap.release()
-            self.status_signal.emit("Cannot open the camera")
+            self.status_signal.emit("Cannot open camera %d" % self.camera_index)
             return None
         try:
             return open_video_file(self.video_file)
@@ -167,7 +204,10 @@ class ProcessingThread(QThread):
         self._status = None
         cap = None
         try:
+            if self.process.method != self.method:
+                self.process = Process(method=self.method)
             self.process.reset()
+            self.log.clear()
             cap = self._open_capture()
             if cap is not None:
                 self._measure(cap)
@@ -219,7 +259,8 @@ class ProcessingThread(QThread):
                 if not self.view_pending:
                     self._send_view(self.process.draw_overlay(frame), self.process.frame_ROI)
                 if est.ready:
-                    self.bpm_signal.emit(est.bpm)
+                    self.bpm_signal.emit(est.bpm, est.snr)
+                    self.log.add(timestamp, est.bpm, est.snr)
                     self._send_plots(est.samples, est.freqs, est.spectrum)
                     self._send_status("Measuring - %.0f fps" % shown_fps, throttle=True)
                 else:
@@ -231,7 +272,7 @@ class ProcessingThread(QThread):
                 # a long gap would corrupt the window: start over when the face is back
                 if timestamp - last_face > 1.5 and self.process.estimator.progress > 0:
                     self.process.reset()
-                    self.bpm_signal.emit(0.0)
+                    self.bpm_signal.emit(0.0, float("-inf"))
 
     def stop(self):
         self.running = False

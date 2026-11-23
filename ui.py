@@ -1,7 +1,7 @@
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-                             QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
+                             QMainWindow, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 
 BG = "#1b1d23"
 PANEL = "#252932"
@@ -9,6 +9,7 @@ BORDER = "#343a46"
 TEXT = "#e6e8ec"
 MUTED = "#8b93a1"
 ACCENT = "#ff4d5a"
+QUALITY_COLORS = {"good": "#3ecf8e", "fair": "#f5b942", "poor": "#8b93a1"}
 
 STYLE = f"""
     QMainWindow, QWidget#root {{ background-color: {BG}; }}
@@ -16,16 +17,18 @@ STYLE = f"""
     QLabel#caption {{ color: {MUTED}; font-size: 12px; font-weight: 600; letter-spacing: 1px; }}
     QLabel#bpm {{ color: {ACCENT}; font-size: 64px; font-weight: 700; }}
     QLabel#bpmUnit {{ color: {MUTED}; font-size: 16px; }}
+    QLabel#bpm[quality="poor"] {{ color: {MUTED}; }}
+    QLabel#quality {{ font-size: 13px; font-weight: 600; }}
     QLabel#view {{ background-color: #000000; border: 1px solid {BORDER}; border-radius: 6px; }}
     QFrame#card {{ background-color: {PANEL}; border: 1px solid {BORDER}; border-radius: 6px; }}
     QFrame#card QLabel {{ background: transparent; }}
-    QPushButton, QComboBox {{
+    QPushButton, QComboBox, QSpinBox {{
         background-color: {PANEL}; color: {TEXT}; border: 1px solid {BORDER};
         border-radius: 6px; padding: 8px 16px; font-size: 14px; min-height: 20px;
     }}
     QPushButton:hover, QComboBox:hover {{ background-color: #2f3440; }}
     QPushButton:pressed {{ background-color: #20242c; }}
-    QPushButton:disabled, QComboBox:disabled {{ color: #5c6370; }}
+    QPushButton:disabled, QComboBox:disabled, QSpinBox:disabled {{ color: #5c6370; }}
     QPushButton#primary {{ background-color: {ACCENT}; border-color: {ACCENT}; color: white; font-weight: 600; }}
     QPushButton#primary:hover {{ background-color: #ff6772; }}
     QComboBox QAbstractItemView {{
@@ -83,6 +86,11 @@ class UI(QMainWindow):
         bpm_layout.setSpacing(0)
         bpm_layout.addWidget(self.bpm_label)
         bpm_layout.addWidget(unit)
+        self.quality_label = QLabel("")
+        self.quality_label.setObjectName("quality")
+        self.quality_label.setAlignment(Qt.AlignCenter)
+        self.quality_label.setToolTip("Signal quality: SNR of the heart-rate peak against the rest of the spectrum")
+        bpm_layout.addWidget(self.quality_label)
 
         # aligned face (what the cheek ROIs are cut from)
         self.face_display = self._view("")
@@ -117,15 +125,29 @@ class UI(QMainWindow):
         self.start_button.setToolTip("Start / stop (Space)")
         self.input_combobox = QComboBox()
         self.input_combobox.addItems(["Webcam", "Video file"])
+        self.camera_spinbox = QSpinBox()
+        self.camera_spinbox.setRange(0, 9)
+        self.camera_spinbox.setPrefix("Camera ")
+        self.camera_spinbox.setToolTip("Camera index (0 is the default camera)")
         self.open_button = QPushButton("Open video...")
         self.open_button.setToolTip("Ctrl+O")
+        self.method_combobox = QComboBox()
+        self.method_combobox.addItems(["Green", "POS"])
+        self.method_combobox.setToolTip("Green: green channel only (best when still).\n"
+                                        "POS: all three channels, cancels lighting and motion changes.")
+        self.save_button = QPushButton("Save CSV...")
+        self.save_button.setToolTip("Save the readings of the last measurement (Ctrl+S)")
+        self.save_button.setEnabled(False)
         self.source_label = QLabel("")
         self.source_label.setObjectName("caption")
         self.source_label.setTextFormat(Qt.PlainText)  # file names are not markup
         controls.addWidget(self.start_button)
         controls.addWidget(self.input_combobox)
+        controls.addWidget(self.camera_spinbox)
         controls.addWidget(self.open_button)
+        controls.addWidget(self.method_combobox)
         controls.addWidget(self.source_label, 1)
+        controls.addWidget(self.save_button)
         grid.addLayout(controls, 3, 0, 1, 2)
 
         grid.setColumnStretch(0, 3)
