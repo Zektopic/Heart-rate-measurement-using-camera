@@ -121,6 +121,7 @@ class UI(QMainWindow):
         self.open_button.setToolTip("Ctrl+O")
         self.source_label = QLabel("")
         self.source_label.setObjectName("caption")
+        self.source_label.setTextFormat(Qt.PlainText)  # file names are not markup
         controls.addWidget(self.start_button)
         controls.addWidget(self.input_combobox)
         controls.addWidget(self.open_button)

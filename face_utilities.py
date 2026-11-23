@@ -1,3 +1,4 @@
+import hashlib
 from collections import OrderedDict
 from pathlib import Path
 
@@ -6,6 +7,27 @@ import numpy as np
 
 # model files live next to this module, so the app works from any directory
 BASE_DIR = Path(__file__).resolve().parent
+
+# SHA-256 of the official dlib models (dlib.net/files). dlib deserialises these
+# files in C++, so a replaced or damaged file is refused before it is parsed.
+MODEL_SHA256 = {
+    "5": "c4b1e9804792707d3a405c2c16a80a20269e6675021f64a41d30fffafbc41888",
+    "68": "fbdc2cb80eb9aa7a758672cbfdda32ba6300efe9b6e6c7a299ff7e736b11b92f",
+}
+
+
+def verify_model(path, sha256):
+    """Raise RuntimeError unless the file at `path` has the expected SHA-256."""
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                digest.update(chunk)
+    except OSError as e:
+        raise RuntimeError("Cannot read the landmark model %s: %s" % (Path(path).name, e)) from e
+    if digest.hexdigest() != sha256:
+        raise RuntimeError("The landmark model %s is damaged or not the official dlib file "
+                           "(SHA-256 mismatch)" % Path(path).name)
 
 
 class Face_utilities():
@@ -183,6 +205,7 @@ class Face_utilities():
             import dlib
             print("[INFO] load " + type + " facial landmarks model ...")
             path = BASE_DIR / ("shape_predictor_" + type + "_face_landmarks.dat")
+            verify_model(path, MODEL_SHA256[type])
             self.predictors[type] = dlib.shape_predictor(str(path))
             print("[INFO] Load model - DONE!")
         return self.predictors[type]
