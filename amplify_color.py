@@ -106,30 +106,62 @@ class VidMag:
             return small + self.magnify_motion()
         return self.reconstruct_frame(self.magnify_color(), small)
 
+    def process_frame(self, frame, motion=False):
+        """Camera frame -> (frame with the FPS drawn on it, newest amplified frame or None)."""
+        h, w = frame.shape[:2]
+        small = cv2.resize(frame, (self.width, int(h * self.width / w))).astype(np.float32)
+        out = self.push(small, motion)
+        if out is not None:
+            amplified = cv2.convertScaleAbs(out)
+            self.frame_out = cv2.resize(amplified, (640, int(amplified.shape[0] * 640 / amplified.shape[1])))
+        cv2.putText(frame, "FPS %.2f" % self.fps, (20, h - 20), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 255, 0), 2)
+        return frame, self.frame_out
+
     def main_loop(self, camera=0, motion=False):
+        # OpenCV is the headless build (no bundled Qt 5), so the window is PyQt6
+        from PyQt6.QtCore import QTimer
+        from PyQt6.QtGui import QKeySequence, QShortcut
+        from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QWidget
+
         cap = cv2.VideoCapture(camera)
         if not cap.isOpened():
             print("[ERROR] cannot open the camera", file=sys.stderr)
             return 1
-        while True:
+        app = QApplication.instance() or QApplication(sys.argv[:1])
+        window = QWidget()
+        window.setWindowTitle("Original | Colour amplification (Esc quits)")
+        layout = QHBoxLayout(window)
+        views = (QLabel("Starting the camera..."), QLabel("Collecting frames..."))
+        for view in views:
+            layout.addWidget(view)
+        QShortcut(QKeySequence("Esc"), window, activated=window.close)
+
+        def step():
             ok, frame = cap.read()
             if not ok:
-                break
-            h, w = frame.shape[:2]
-            small = cv2.resize(frame, (self.width, int(h * self.width / w))).astype(np.float32)
-            out = self.push(small, motion)
-            if out is not None:
-                self.frame_out = cv2.convertScaleAbs(out)
-            cv2.putText(frame, "FPS %.2f" % self.fps, (20, h - 20), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 255, 0), 2)
-            cv2.imshow("Original", frame)
-            if self.frame_out is not None:
-                f2 = cv2.resize(self.frame_out, (640, int(self.frame_out.shape[0] * 640 / self.frame_out.shape[1])))
-                cv2.imshow("Color amplification", f2)
-            if cv2.waitKey(1) & 0xFF == 27:  # Esc
-                break
+                window.close()
+                return
+            for view, image in zip(views, self.process_frame(frame, motion), strict=True):
+                if image is not None:
+                    view.setPixmap(to_pixmap(image))
+
+        timer = QTimer(window)
+        timer.timeout.connect(step)
+        timer.start(0)
+        window.show()
+        app.exec()
+        timer.stop()
         cap.release()
-        cv2.destroyAllWindows()
         return 0
+
+
+def to_pixmap(frame):
+    """BGR uint8 numpy frame -> QPixmap."""
+    from PyQt6.QtGui import QImage, QPixmap
+
+    frame = np.ascontiguousarray(frame)
+    h, w = frame.shape[:2]
+    return QPixmap.fromImage(QImage(frame.data, w, h, frame.strides[0], QImage.Format.Format_BGR888))
 
 
 def main(argv=None):

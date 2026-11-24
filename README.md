@@ -19,9 +19,16 @@
 - Amplify color to make the color variation visible 
 
 # Requirements
+Python 3.12 to 3.15.
 ```
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
+- The GUI uses PyQt6 (Qt 6). Qt 5 and PyQt5 are no longer supported upstream and are not used
+- OpenCV is the headless build (`opencv-python-headless`), which bundles no Qt 5 libraries. It provides the same
+  `cv2` module as `opencv-python`, so uninstall `opencv-python` first if it is installed
+- dlib is built from source by pip and needs CMake and a C++ compiler
+- On Linux with X11, Qt 6 also needs `libxcb-cursor0` (`sudo apt install libxcb-cursor0` on Debian/Ubuntu)
 
 
 # Implementation
@@ -47,7 +54,9 @@ python app.py [--camera N] [--video FILE] [--method green|pos]
   their file name.
 - The landmark models are checked against the SHA-256 of the official dlib files before dlib parses them.
 - An error while processing a frame ends the measurement with a message instead of aborting the app.
-- CI runs `pip-audit` on `requirements.txt`; Dependabot proposes updates for the pinned packages and Actions.
+- Every dependency is pinned, including the dependencies of the dependencies. CI runs `pip-audit` on the pins and on
+  the installed environment and fails on any known vulnerability; Dependabot proposes updates for the pins and the
+  Actions every week.
 
 # Tests
 ```

@@ -32,3 +32,26 @@ def test_vidmag_outputs_newest_frame(motion):
     assert out is not None
     assert out.shape == (192, 256, 3)
     assert np.isfinite(out).all()
+
+
+def test_amplify_color_window_runs_until_the_camera_ends(monkeypatch):
+    frames = [f for f, _ in clip(72, seconds=2, size=(320, 240))]
+
+    class FakeCamera:
+        def __init__(self, index):
+            self.frames = iter(frames)
+
+        def isOpened(self):
+            return True
+
+        def read(self):
+            frame = next(self.frames, None)
+            return frame is not None, frame
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(amplify_color.cv2, "VideoCapture", FakeCamera)
+    vm = amplify_color.VidMag(buffer_size=20)
+    assert vm.main_loop() == 0
+    assert vm.frame_out is not None and vm.frame_out.shape[1] == 640

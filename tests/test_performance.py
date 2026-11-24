@@ -61,7 +61,7 @@ def test_fit_keeps_aspect_ratio():
 
 
 def test_slow_gui_gets_the_newest_frame_instead_of_a_queue(monkeypatch):
-    from PyQt5.QtCore import QCoreApplication
+    from PyQt6.QtCore import QCoreApplication
 
     app = QCoreApplication.instance() or QCoreApplication([])  # noqa: F841 - keeps Qt alive
     frames = clip(72, seconds=2)

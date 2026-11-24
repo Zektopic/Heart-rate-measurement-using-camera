@@ -43,7 +43,7 @@ def test_analyze_video_refuses_non_videos(tmp_path, capsys):
 
 @pytest.fixture
 def window(monkeypatch):
-    from PyQt5.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication
 
     import app as app_module
 
@@ -73,7 +73,7 @@ def test_gui_shows_quality(window):
 
 
 def test_gui_saves_csv(window, tmp_path, monkeypatch):
-    from PyQt5.QtWidgets import QFileDialog
+    from PyQt6.QtWidgets import QFileDialog
 
     target = tmp_path / "hr.csv"
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(target), "")))

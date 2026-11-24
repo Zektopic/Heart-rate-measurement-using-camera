@@ -3,7 +3,7 @@ import time
 import traceback
 
 import cv2
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 
 from face_utilities import Face_utilities
 from signal_processing import HeartRateEstimator, extract_bgr, quality_label
@@ -197,7 +197,7 @@ class ProcessingThread(QThread):
             return None
 
     def run(self):
-        # An exception escaping QThread.run() makes PyQt5 abort the whole
+        # An exception escaping QThread.run() makes PyQt abort the whole
         # application, so a bad frame or file ends the measurement instead.
         self.running = True
         self.view_pending = self.plot_pending = False

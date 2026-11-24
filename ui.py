@@ -1,7 +1,9 @@
-import pyqtgraph as pg
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+# Qt is imported before pyqtgraph so that pyqtgraph binds to PyQt6
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
                              QMainWindow, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
+
+import pyqtgraph as pg
 
 BG = "#1b1d23"
 PANEL = "#252932"
@@ -76,10 +78,10 @@ class UI(QMainWindow):
         # BPM readout
         self.bpm_label = QLabel("--")
         self.bpm_label.setObjectName("bpm")
-        self.bpm_label.setAlignment(Qt.AlignCenter)
+        self.bpm_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         unit = QLabel("beats per minute")
         unit.setObjectName("bpmUnit")
-        unit.setAlignment(Qt.AlignCenter)
+        unit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bpm_box = QWidget()
         bpm_layout = QVBoxLayout(bpm_box)
         bpm_layout.setContentsMargins(0, 0, 0, 0)
@@ -88,7 +90,7 @@ class UI(QMainWindow):
         bpm_layout.addWidget(unit)
         self.quality_label = QLabel("")
         self.quality_label.setObjectName("quality")
-        self.quality_label.setAlignment(Qt.AlignCenter)
+        self.quality_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.quality_label.setToolTip("Signal quality: SNR of the heart-rate peak against the rest of the spectrum")
         bpm_layout.addWidget(self.quality_label)
 
@@ -111,7 +113,7 @@ class UI(QMainWindow):
         self.fft_plot = self._plot("Rate (bpm)")
         self.fft_plot.setXRange(50, 180, padding=0)
         self.fft_curve = self.fft_plot.plot(pen=pg.mkPen("#4da3ff", width=2))
-        self.fft_peak = pg.InfiniteLine(angle=90, pen=pg.mkPen(ACCENT, style=Qt.DashLine))
+        self.fft_peak = pg.InfiniteLine(angle=90, pen=pg.mkPen(ACCENT, style=Qt.PenStyle.DashLine))
         self.fft_peak.setVisible(False)
         self.fft_plot.addItem(self.fft_peak)
         grid.addWidget(_card("Spectrum", self.fft_plot), 2, 1)
@@ -140,7 +142,7 @@ class UI(QMainWindow):
         self.save_button.setEnabled(False)
         self.source_label = QLabel("")
         self.source_label.setObjectName("caption")
-        self.source_label.setTextFormat(Qt.PlainText)  # file names are not markup
+        self.source_label.setTextFormat(Qt.TextFormat.PlainText)  # file names are not markup
         controls.addWidget(self.start_button)
         controls.addWidget(self.input_combobox)
         controls.addWidget(self.camera_spinbox)
@@ -162,8 +164,8 @@ class UI(QMainWindow):
     def _view(text):
         label = QLabel(text)
         label.setObjectName("view")
-        label.setAlignment(Qt.AlignCenter)
-        label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
         label.setMinimumSize(320, 240)
         return label
 
