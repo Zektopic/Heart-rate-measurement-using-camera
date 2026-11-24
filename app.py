@@ -2,7 +2,7 @@ import os
 import sys
 
 import numpy as np
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QEvent, Qt
 from PyQt5.QtGui import QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import QApplication, QFileDialog, QShortcut
 
@@ -10,20 +10,23 @@ from processing import ProcessingThread
 from ui import UI
 
 
-def to_pixmap(frame, size):
-    """BGR numpy frame -> QPixmap scaled (keeping aspect ratio) to fit `size`."""
+def to_pixmap(frame, device_pixel_ratio=1.0):
+    """BGR numpy frame (already scaled by the worker) -> QPixmap."""
     frame = np.ascontiguousarray(frame)
     h, w = frame.shape[:2]
     image = QImage(frame.data, w, h, frame.strides[0], QImage.Format_BGR888)
-    return QPixmap.fromImage(image).scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    pixmap = QPixmap.fromImage(image)  # copies the pixels, frame can be freed
+    pixmap.setDevicePixelRatio(device_pixel_ratio)
+    return pixmap
 
 
 class App(UI):
     def __init__(self):
         super().__init__()
         self.processing_thread = ProcessingThread()
-        self.processing_thread.frame_signal.connect(self.update_video_display)
-        self.processing_thread.face_signal.connect(self.update_face_display)
+        self.processing_thread.view_signal.connect(self.update_views)
+        self.video_display.installEventFilter(self)
+        self.face_display.installEventFilter(self)
         self.processing_thread.bpm_signal.connect(self.update_bpm)
         self.processing_thread.plot_signal.connect(self.update_plots)
         self.processing_thread.status_signal.connect(self.statusBar().showMessage)
@@ -68,11 +71,26 @@ class App(UI):
     def set_input_source(self, index):
         self.processing_thread.webcam = index == 0
 
-    def update_video_display(self, frame):
-        self.video_display.setPixmap(to_pixmap(frame, self.video_display.size()))
+    def update_views(self, frame, face):
+        ratio = self.devicePixelRatioF()
+        self.video_display.setPixmap(to_pixmap(frame, ratio))
+        if face is not None:
+            self.face_display.setPixmap(to_pixmap(face, ratio))
+        self.processing_thread.view_shown()
 
-    def update_face_display(self, face):
-        self.face_display.setPixmap(to_pixmap(face, self.face_display.size()))
+    def _update_view_sizes(self):
+        """Tell the worker how large to scale the frames (in device pixels)."""
+        ratio = self.devicePixelRatioF()
+
+        def device_size(label):
+            return (int(label.width() * ratio), int(label.height() * ratio))
+
+        self.processing_thread.view_sizes = (device_size(self.video_display), device_size(self.face_display))
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Resize and obj in (self.video_display, self.face_display):
+            self._update_view_sizes()
+        return super().eventFilter(obj, event)
 
     def update_bpm(self, bpm):
         self.bpm_label.setText(f"{bpm:.0f}" if bpm > 0 else "--")
@@ -83,6 +101,7 @@ class App(UI):
         self.signal_curve.setData(samples)
         if freqs is not None:
             self.fft_curve.setData(freqs, spectrum)
+        self.processing_thread.plots_shown()
 
     def closeEvent(self, event):
         self.processing_thread.stop()

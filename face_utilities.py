@@ -39,9 +39,17 @@ class Face_utilities():
         detect_width (int): frames wider than this are down-scaled before the
             (slow) HOG face detector runs. The landmark predictor still works
             on the full resolution frame, so accuracy is unaffected.
+        redetect_every (int): run the face detector at most every this many
+            frames. In between, the face box is placed from the previous
+            frame's landmarks (tracking), which skips the detector, the most
+            expensive step. 1 detects in every frame.
     '''
 
-    def __init__(self, face_width=200, detect_width=320):
+    # tracking gives up (and detects again) when the face moved more than this
+    # fraction of its box width since the previous frame
+    TRACK_MAX_JUMP = 0.25
+
+    def __init__(self, face_width=200, detect_width=320, redetect_every=1):
         self.detector = None
         self.predictors = {}
         self.age_net = None
@@ -55,6 +63,8 @@ class Face_utilities():
         self.desiredFaceWidth = face_width
         self.desiredFaceHeight = face_width
         self.detect_width = detect_width
+        self.redetect_every = max(int(redetect_every), 1)
+        self._track = None  # see _update_track
 
         # For dlib's 68-point facial landmark detector:
         self.FACIAL_LANDMARKS_68_IDXS = OrderedDict([
@@ -228,14 +238,66 @@ class Face_utilities():
             return None, None
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        rects = self.face_detection(frame, gray)
-
-        if not rects:
-            return None, None
+        rect = self._tracked_rect(gray.shape)
+        detected = rect is None
+        if detected:
+            rects = self.face_detection(frame, gray)
+            if not rects:
+                self._track = None
+                return None, None
+            rect = rects[0]
+        else:
+            rects = [rect]
 
         from imutils import face_utils
-        shape = face_utils.shape_to_np(predictor(gray, rects[0]))
+        shape = face_utils.shape_to_np(predictor(gray, rect))
+        if self.redetect_every > 1:
+            self._update_track(rect, shape, detected)
         return shape, rects
+
+    def reset_tracking(self):
+        """Forget the tracked face: the next frame runs the detector."""
+        self._track = None
+
+    @staticmethod
+    def _centre_and_spread(shape):
+        centre = shape.mean(axis=0)
+        spread = float(np.sqrt(((shape - centre) ** 2).sum(axis=1).mean()))
+        return centre, max(spread, 1e-3)
+
+    def _update_track(self, rect, shape, detected):
+        """Remember where the face box sits relative to the landmarks.
+
+        The box geometry is learnt only on detected frames (so tracking cannot
+        drift away from what the detector would find); tracked frames just
+        move and scale that geometry with the landmarks.
+        """
+        centre, spread = self._centre_and_spread(shape)
+        if detected:
+            box = ((rect.left() + rect.right()) / 2 - centre[0], (rect.top() + rect.bottom()) / 2 - centre[1],
+                   rect.width(), rect.height())
+            self._track = {"box": np.array(box) / spread, "centre": centre, "spread": spread, "age": 1}
+            return
+        track = self._track
+        jump = np.hypot(*(centre - track["centre"]))
+        track["age"] += 1
+        if jump > self.TRACK_MAX_JUMP * rect.width():
+            track["age"] = self.redetect_every  # fast motion: confirm with the detector
+        track["centre"], track["spread"] = centre, spread
+
+    def _tracked_rect(self, frame_shape):
+        """Face box for this frame from the last landmarks, or None to detect."""
+        track = self._track
+        if track is None or track["age"] >= self.redetect_every:
+            return None
+        dx, dy, w, h = track["box"] * track["spread"]
+        cx, cy = track["centre"][0] + dx, track["centre"][1] + dy
+        left, top, right, bottom = int(cx - w / 2), int(cy - h / 2), int(cx + w / 2), int(cy + h / 2)
+        height, width = frame_shape[:2]
+        if left < -w / 4 or top < -h / 4 or right > width + w / 4 or bottom > height + h / 4:
+            return None  # leaving the frame: let the detector decide
+        import dlib
+        return dlib.rectangle(left, top, right, bottom)
 
     def ROI_extraction(self, face, shape):
         '''
