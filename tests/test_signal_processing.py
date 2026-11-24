@@ -11,7 +11,7 @@ def feed(est, bpm, fps=30.0, seconds=12.0, noise=0.0, jitter=0.0, seed=0):
     t = t + rng.uniform(-jitter, jitter, n)
     t.sort()
     values = 120 + 0.8 * np.sin(2 * np.pi * bpm / 60 * t) + rng.normal(0, noise, n)
-    for v, ts in zip(values, t):
+    for v, ts in zip(values, t, strict=True):
         est.push(v, ts)
 
 

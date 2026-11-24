@@ -1,7 +1,6 @@
 import os
 import sys
 
-import cv2
 import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QKeySequence, QPixmap
