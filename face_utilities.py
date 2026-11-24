@@ -30,6 +30,11 @@ def verify_model(path, sha256):
                            "(SHA-256 mismatch)" % Path(path).name)
 
 
+def shape_to_np(shape):
+    """dlib full_object_detection -> (num_parts, 2) int array of (x, y) landmarks."""
+    return np.array([(p.x, p.y) for p in shape.parts()], dtype=int)
+
+
 class Face_utilities():
     '''
     This class contains all needed functions to work with faces in a frame
@@ -249,8 +254,7 @@ class Face_utilities():
         else:
             rects = [rect]
 
-        from imutils import face_utils
-        shape = face_utils.shape_to_np(predictor(gray, rect))
+        shape = shape_to_np(predictor(gray, rect))
         if self.redetect_every > 1:
             self._update_track(rect, shape, detected)
         return shape, rects

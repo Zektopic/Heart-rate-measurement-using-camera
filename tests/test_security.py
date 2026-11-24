@@ -112,7 +112,7 @@ def test_tampered_or_missing_model_is_refused(tmp_path):
 
 
 def test_worker_error_ends_measurement_instead_of_aborting(monkeypatch):
-    from PyQt5.QtCore import QCoreApplication
+    from PyQt6.QtCore import QCoreApplication
 
     from processing import ProcessingThread
 

@@ -3,9 +3,9 @@ import os
 import sys
 
 import numpy as np
-from PyQt5.QtCore import QEvent, Qt
-from PyQt5.QtGui import QImage, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QFileDialog, QShortcut
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtWidgets import QApplication, QFileDialog
 
 from processing import ProcessingThread
 from signal_processing import METHODS, quality_label
@@ -16,7 +16,7 @@ def to_pixmap(frame, device_pixel_ratio=1.0):
     """BGR numpy frame (already scaled by the worker) -> QPixmap."""
     frame = np.ascontiguousarray(frame)
     h, w = frame.shape[:2]
-    image = QImage(frame.data, w, h, frame.strides[0], QImage.Format_BGR888)
+    image = QImage(frame.data, w, h, frame.strides[0], QImage.Format.Format_BGR888)
     pixmap = QPixmap.fromImage(image)  # copies the pixels, frame can be freed
     pixmap.setDevicePixelRatio(device_pixel_ratio)
     return pixmap
@@ -42,9 +42,9 @@ class App(UI):
         self.input_combobox.currentIndexChanged.connect(self.set_input_source)
         self.camera_spinbox.valueChanged.connect(self.set_camera)
         self.method_combobox.currentIndexChanged.connect(self.set_method)
-        QShortcut(QKeySequence(Qt.Key_Space), self, activated=self.toggle_processing)
-        QShortcut(QKeySequence.Open, self, activated=self.open_video)
-        QShortcut(QKeySequence.Save, self, activated=self.save_csv)
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self, activated=self.toggle_processing)
+        QShortcut(QKeySequence.StandardKey.Open, self, activated=self.open_video)
+        QShortcut(QKeySequence.StandardKey.Save, self, activated=self.save_csv)
 
     def toggle_processing(self):
         if self.processing_thread.isRunning():
@@ -123,7 +123,7 @@ class App(UI):
         self.processing_thread.view_sizes = (device_size(self.video_display), device_size(self.face_display))
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Resize and obj in (self.video_display, self.face_display):
+        if event.type() == QEvent.Type.Resize and obj in (self.video_display, self.face_display):
             self._update_view_sizes()
         return super().eventFilter(obj, event)
 
@@ -173,7 +173,7 @@ def main(argv=None):
         window.source_label.setText(os.path.basename(args.video))
         window.input_combobox.setCurrentIndex(1)
         window.toggle_processing()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':
