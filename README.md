@@ -29,6 +29,15 @@ python app.py
 - `python graph_plot.py` plots the spectrum of the recorded `signal.dat` (needs `pip install matplotlib`)
 - `python amplify_color.py [--camera N] [--motion]` is the Eulerian Video Magnification demo (Esc quits)
 
+# Security
+- Video files are untrusted input. They are opened through `video_source.py`: local regular files only, and FFmpeg
+  limited to the `file` protocol and ordinary container formats (mp4/mov, avi, mkv/webm, mpeg, wmv, flv). Playlists
+  (`.m3u8`), ffconcat scripts and other formats that make FFmpeg open further files or URLs are refused, whatever
+  their file name.
+- The landmark models are checked against the SHA-256 of the official dlib files before dlib parses them.
+- An error while processing a frame ends the measurement with a message instead of aborting the app.
+- CI runs `pip-audit` on `requirements.txt`; Dependabot proposes updates for the pinned packages and Actions.
+
 # Tests
 ```
 pip install pytest

@@ -1,4 +1,5 @@
 import time
+import traceback
 
 import cv2
 import numpy as np
@@ -6,6 +7,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 from face_utilities import Face_utilities
 from signal_processing import HeartRateEstimator, extract_color
+from video_source import VideoSourceError, open_camera, open_video_file
 
 
 class Process(object):
@@ -79,25 +81,39 @@ class ProcessingThread(QThread):
         self.webcam = False
 
     def _open_capture(self):
+        """Returns an opened capture, or None after reporting the error."""
         if self.webcam:
-            cap = cv2.VideoCapture(0)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # always the newest frame, no lag
-        else:
-            cap = cv2.VideoCapture(self.video_file)
-        return cap
+            cap = open_camera(0)
+            if cap.isOpened():
+                return cap
+            cap.release()
+            self.status_signal.emit("Cannot open the camera")
+            return None
+        try:
+            return open_video_file(self.video_file)
+        except VideoSourceError as e:
+            self.status_signal.emit(str(e))
+            return None
 
     def run(self):
+        # An exception escaping QThread.run() makes PyQt5 abort the whole
+        # application, so a bad frame or file ends the measurement instead.
         self.running = True
-        self.process.reset()
-        cap = self._open_capture()
-        if not cap.isOpened():
-            self.status_signal.emit("Cannot open " + ("the camera" if self.webcam else "the video file"))
-            cap.release()
+        cap = None
+        try:
+            self.process.reset()
+            cap = self._open_capture()
+            if cap is not None:
+                self._measure(cap)
+        except Exception as e:  # reported to the user instead, see above
+            traceback.print_exc()
+            self.status_signal.emit("Error: %s" % e)
+        finally:
+            if cap is not None:
+                cap.release()
             self.running = False
-            return
 
+    def _measure(self, cap):
         # A video file is processed against its own clock (frame index / fps),
         # not wall time, or the heart rate would depend on how fast we decode.
         video_fps = 0.0 if self.webcam else cap.get(cv2.CAP_PROP_FPS)
@@ -150,9 +166,6 @@ class ProcessingThread(QThread):
                 if timestamp - last_face > 1.5 and self.process.estimator.progress > 0:
                     self.process.reset()
                     self.bpm_signal.emit(0.0)
-
-        cap.release()
-        self.running = False
 
     def stop(self):
         self.running = False
